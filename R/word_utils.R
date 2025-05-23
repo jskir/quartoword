@@ -202,3 +202,63 @@ alignments <- align_word_to_qmd(edited_text, qmd_structure)
 
 # Examine what we found
 str(alignments)  # str() shows the structure of complex objects
+
+
+#' Find best matching Word paragraph for each QMD text block
+#' @param word_text Character vector from extract_word_text()
+#' @param qmd_structure List from parse_qmd_structure()
+#' @return List of alignments between Word and QMD
+align_word_to_qmd_smart <- function(word_text, qmd_structure) {
+  alignments <- list()
+
+  # Get only the text blocks from QMD structure
+  text_blocks <- qmd_structure[sapply(qmd_structure, function(x) x$type == "text")]
+
+  for (i in seq_along(text_blocks)) {
+    qmd_block <- text_blocks[[i]]
+
+    # For each QMD text block, find the most similar Word paragraph
+    qmd_content <- paste(qmd_block$content, collapse = " ")
+
+    # Calculate similarity with each Word paragraph
+    # We'll use a simple approach: find paragraphs that share words
+    similarities <- sapply(word_text, function(word_para) {
+      # Convert both to lowercase and split into words
+      qmd_words <- tolower(strsplit(qmd_content, "\\s+")[[1]])
+      word_words <- tolower(strsplit(word_para, "\\s+")[[1]])
+
+      # Count shared words (simple similarity measure)
+      shared_words <- sum(qmd_words %in% word_words)
+      total_words <- length(unique(c(qmd_words, word_words)))
+
+      # Return similarity score (0 to 1)
+      if (total_words > 0) shared_words / total_words else 0
+    })
+
+    # Find the Word paragraph with highest similarity
+    best_match_idx <- which.max(similarities)
+
+    alignments[[i]] <- list(
+      qmd_block = i,
+      qmd_lines = qmd_block$start_line:qmd_block$end_line,
+      original_text = qmd_block$content,
+      revised_text = word_text[best_match_idx],
+      similarity_score = similarities[best_match_idx]
+    )
+  }
+
+  return(alignments)
+}
+
+# Test the smart alignment
+smart_alignments <- align_word_to_qmd_smart(edited_text, qmd_structure)
+str(smart_alignments)
+
+# Look for your revision
+for (i in seq_along(smart_alignments)) {
+  cat("Block", i, ":\n")
+  cat("Original:", smart_alignments[[i]]$original_text, "\n")
+  cat("Revised:", smart_alignments[[i]]$revised_text, "\n")
+  cat("Score:", smart_alignments[[i]]$similarity_score, "\n\n")
+}
+
