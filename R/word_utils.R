@@ -262,3 +262,112 @@ for (i in seq_along(smart_alignments)) {
   cat("Score:", smart_alignments[[i]]$similarity_score, "\n\n")
 }
 
+#' Clean text for better alignment matching
+#' @param text Character vector to clean
+#' @return Cleaned character vector
+clean_text_for_matching <- function(text) {
+  # Combine all text into one string for processing
+  # paste() combines character vectors into single strings
+  # collapse = " " means join elements with spaces
+  clean_text <- paste(text, collapse = " ")
+
+  # Remove markdown headers (# ## ###)
+  # gsub() does find-and-replace with regular expressions
+  # "^#+\\s*" means: start of line (^), one or more # (+), optional whitespace (\\s*)
+  clean_text <- gsub("^#+\\s*", "", clean_text)
+
+  # Remove common Quarto parameter patterns
+  # These are the "predictable finite set of characters" you mentioned
+
+  # Remove inline code: `code`
+  # "`[^`]*`" means: backtick, any chars except backtick, backtick
+  clean_text <- gsub("`[^`]*`", "", clean_text)
+
+  # Remove parameter references: {{< param name >}}
+  # "\\{\\{<.*?>\\}\\}" means: literal {{< anything >}}
+  clean_text <- gsub("\\{\\{<.*?>\\}\\}", "", clean_text)
+
+  # Remove R inline code: `r code`
+  # "`r\\s+[^`]*`" means: `r followed by whitespace and anything until closing `
+  clean_text <- gsub("`r\\s+[^`]*`", "", clean_text)
+
+  # Remove cross-references: @ref(fig:name) or @tbl-name
+  # Fixed the character class - put hyphen at end to avoid range issues
+  # "@[a-zA-Z:()0-9-]*" means: @ followed by letters, colons, parens, numbers, hyphens
+  clean_text <- gsub("@[a-zA-Z:()0-9-]*", "", clean_text)
+
+  # Remove extra whitespace
+  # "\\s+" means one or more whitespace characters
+  # trimws() removes leading and trailing whitespace
+  clean_text <- trimws(gsub("\\s+", " ", clean_text))
+
+  return(clean_text)
+}
+
+#' Improved alignment using text cleaning
+#' @param word_text Character vector from extract_word_text()
+#' @param qmd_structure List from parse_qmd_structure()
+#' @return List of alignments between Word and QMD
+align_word_to_qmd_clean <- function(word_text, qmd_structure) {
+  alignments <- list()
+
+  # Get only the text blocks from QMD structure
+  # sapply() applies a function to each element of a list
+  # Here we're checking if each element has type "text"
+  text_blocks <- qmd_structure[sapply(qmd_structure, function(x) x$type == "text")]
+
+  for (i in seq_along(text_blocks)) {
+    qmd_block <- text_blocks[[i]]
+
+    # Clean the QMD content for better matching
+    qmd_content_clean <- clean_text_for_matching(qmd_block$content)
+
+    # Calculate similarity with each Word paragraph (also cleaned)
+    similarities <- sapply(word_text, function(word_para) {
+      word_content_clean <- clean_text_for_matching(word_para)
+
+      # Convert both to lowercase and split into words
+      # strsplit() splits strings based on patterns
+      # "\\s+" means split on any whitespace
+      # [[1]] gets the first (and only) element from the list result
+      qmd_words <- tolower(strsplit(qmd_content_clean, "\\s+")[[1]])
+      word_words <- tolower(strsplit(word_content_clean, "\\s+")[[1]])
+
+      # Count shared words
+      # %in% checks if elements of left vector are in right vector
+      # sum() counts how many TRUE values we get
+      shared_words <- sum(qmd_words %in% word_words)
+
+      # unique() removes duplicates, c() combines vectors
+      total_words <- length(unique(c(qmd_words, word_words)))
+
+      # Return similarity score (proportion of shared words)
+      if (total_words > 0) shared_words / total_words else 0
+    })
+
+    # which.max() returns the index of the maximum value
+    best_match_idx <- which.max(similarities)
+
+    alignments[[i]] <- list(
+      qmd_block = i,
+      qmd_lines = qmd_block$start_line:qmd_block$end_line,
+      original_text = qmd_block$content,
+      revised_text = word_text[best_match_idx],
+      similarity_score = similarities[best_match_idx]
+    )
+  }
+
+  return(alignments)
+}
+
+
+# Test the cleaned alignment
+clean_alignments <- align_word_to_qmd_clean(edited_text, qmd_structure)
+
+# Compare results
+for (i in seq_along(clean_alignments)) {
+  cat("Block", i, ":\n")
+  cat("Original:", clean_alignments[[i]]$original_text, "\n")
+  cat("Revised:", clean_alignments[[i]]$revised_text, "\n")
+  cat("Score:", clean_alignments[[i]]$similarity_score, "\n\n")
+}
