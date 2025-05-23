@@ -115,43 +115,90 @@ parse_qmd_structure <- function(qmd_path) {
   return(components)
 }
 
-# Parse your QMD structure
-qmd_structure <- parse_qmd_structure("templates/simple_csr.qmd")
-str(qmd_structure)
-
 #' Align Word document text with QMD structure
 #' @param word_text Character vector from extract_word_text()
 #' @param qmd_structure List from parse_qmd_structure()
 #' @return List of alignments between Word and QMD
 align_word_to_qmd <- function(word_text, qmd_structure) {
+  # Initialize empty list to store our alignment results
+  # list() creates an empty list that we can add elements to
   alignments <- list()
+
+  # Keep track of which Word paragraph we're currently looking at
+  # We'll increment this as we match paragraphs to QMD blocks
   word_idx <- 1
 
+  # Loop through each component of the QMD structure
+  # seq_along() creates a sequence 1, 2, 3... for the length of qmd_structure
+  # This is safer than 1:length() because it handles empty lists properly
   for (i in seq_along(qmd_structure)) {
+
+    # Only process text blocks, skip code chunks and YAML
+    # The $ operator extracts named elements from lists
     if (qmd_structure[[i]]$type == "text") {
+
+      # Extract the original text content from this QMD block
+      # This is a character vector of the original lines
       qmd_text <- qmd_structure[[i]]$content
 
       # Try to match QMD text blocks with Word paragraphs
-      # We'll use a simple approach: consecutive matching
+      # Strategy: assume Word paragraphs appear in same order as QMD lines
+
+      # character() creates an empty character vector
+      # We'll fill this with the corresponding Word text
       matched_word_text <- character()
+
+      # Remember where we started matching in the Word document
+      # This helps us track which Word paragraphs correspond to this QMD block
       match_start <- word_idx
 
+      # Loop through each line of text in this QMD block
+      # We assume each QMD text line corresponds to one Word paragraph
       for (qmd_line in qmd_text) {
+
+        # Make sure we haven't run out of Word paragraphs
+        # length() returns the number of elements in word_text
         if (word_idx <= length(word_text)) {
-          # Simple matching - we'll improve this
+
+          # Take the next Word paragraph as the revised version of this QMD line
+          # c() combines vectors - here we're adding one more element
           matched_word_text <- c(matched_word_text, word_text[word_idx])
+
+          # Move to the next Word paragraph for the next QMD line
           word_idx <- word_idx + 1
         }
       }
 
+      # Store the alignment information for this QMD block
+      # Double brackets [[]] let us assign to list elements
       alignments[[i]] <- list(
-        qmd_block = i,
+        qmd_block = i,  # Which QMD block this is (for reference)
+
+        # Create sequence of line numbers this block spans in the QMD file
+        # The : operator creates sequences, so 5:8 gives c(5, 6, 7, 8)
         qmd_lines = qmd_structure[[i]]$start_line:qmd_structure[[i]]$end_line,
-        original_text = qmd_text,
-        revised_text = matched_word_text
+
+        original_text = qmd_text,        # Original QMD text lines
+        revised_text = matched_word_text  # Corresponding Word paragraphs (potentially edited)
       )
     }
   }
 
+  # Return the complete list of alignments
   return(alignments)
 }
+
+
+
+# Test the alignment function
+# First, get the structure of your QMD
+qmd_structure <- parse_qmd_structure("templates/simple_csr.qmd")
+
+# Get the text from your edited Word document
+edited_text <- extract_word_text("templates/simple_csr.docx")
+
+# Now align them
+alignments <- align_word_to_qmd(edited_text, qmd_structure)
+
+# Examine what we found
+str(alignments)  # str() shows the structure of complex objects
