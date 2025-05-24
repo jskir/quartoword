@@ -10,7 +10,7 @@ This section describes the study design and methodology.
 # Results
 ## Primary Endpoint
 Results of the primary endpoint analysis will go here.
-## Secondary Endpoints  
+## Secondary Endpoints
 Secondary endpoint results will be presented in this section.
 # Conclusions
 Study conclusions and interpretation.

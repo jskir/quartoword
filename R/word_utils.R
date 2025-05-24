@@ -18,10 +18,10 @@ extract_word_text <- function(docx_path) {
     stop("officer package is required. Install with: install.packages('officer')")
   }
 
-  # Read the Word document
+  # Read the Word document (create a Word document object)
   doc <- officer::read_docx(docx_path)
 
-  # Extract all text content
+  # Extract all text content (get Word content in a dataframe)
   content <- officer::docx_summary(doc)
 
   # Filter for paragraph text only
@@ -590,9 +590,326 @@ parse_qmd_structure_v2 <- function(qmd_path) {
 qmd_structure_v2 <- parse_qmd_structure_v2("templates/simple_csr.qmd")
 cat("Number of components found:", length(qmd_structure_v2), "\n")
 
+# cat means concatenate and print to console
+
 # Look at what it found
 for (i in seq_along(qmd_structure_v2)) {
   cat("\nSection", i, ":\n")
   cat("Lines:", qmd_structure_v2[[i]]$start_line, "to", qmd_structure_v2[[i]]$end_line, "\n")
   cat("Content:", paste(qmd_structure_v2[[i]]$content, collapse = " | "), "\n")
 }
+
+
+# Create a new master function using the improved parser
+quartoword_update_v2 <- function(qmd_path, word_path, backup = TRUE) {
+
+  # Safety first - create backup of original QMD
+  if (backup) {
+    backup_path <- paste0(qmd_path, ".backup")
+    file.copy(qmd_path, backup_path, overwrite = TRUE)
+    cat("Created backup:", backup_path, "\n")
+  }
+
+  cat("🔄 Starting quartoword round-trip update...\n\n")
+
+  # Step 1: Parse the original QMD structure (using v2 parser)
+  cat("📖 Parsing QMD structure...\n")
+  qmd_structure <- parse_qmd_structure_v2(qmd_path)
+  cat("Found", length(qmd_structure), "components\n\n")
+
+  # Step 2: Extract text from edited Word document
+  cat("📄 Extracting Word document text...\n")
+  word_text <- extract_word_text(word_path)
+  cat("Extracted", length(word_text), "paragraphs\n\n")
+
+  # Step 3: Align Word text with QMD structure
+  cat("🎯 Aligning Word text with QMD structure...\n")
+  alignments <- align_word_to_qmd_clean(word_text, qmd_structure)
+  cat("Created", length(alignments), "alignments\n\n")
+
+  # Step 4: Update the QMD file
+  cat("✏️  Updating QMD file with revisions...\n")
+  update_qmd_with_revisions(qmd_path, alignments)
+
+  cat("✅ Round-trip complete! Your QMD file has been updated.\n")
+  cat("💡 You can now re-render to see changes with fresh data.\n")
+
+  return(TRUE)
+}
+
+# First, let's make sure we have a clean starting point
+file.copy("templates/simple_csr.qmd.backup", "templates/simple_csr.qmd", overwrite = TRUE)
+
+# Run the complete workflow with the improved parser
+quartoword_update_v2("templates/simple_csr.qmd", "templates/simple_csr.docx")
+
+# Check what the updated QMD looks like
+cat("Updated QMD file:\n")
+readLines("templates/simple_csr.qmd")
+
+
+# Let's see what we're actually extracting from the Word document
+word_text <- extract_word_text("templates/simple_csr.docx")
+cat("Word document contains", length(word_text), "paragraphs:\n")
+for (i in seq_along(word_text)) {
+  cat(i, ":", word_text[i], "\n")
+}
+
+
+# Restore clean version first
+file.copy("templates/simple_csr.qmd.backup", "templates/simple_csr.qmd", overwrite = TRUE)
+
+# Parse the structure again
+qmd_structure_v2 <- parse_qmd_structure_v2("templates/simple_csr.qmd")
+
+# Show each section clearly
+for (i in seq_along(qmd_structure_v2)) {
+  cat("\nQMD Section", i, ":\n")
+  for (line in qmd_structure_v2[[i]]$content) {
+    cat("  ", line, "\n")
+  }
+}
+
+
+# Create a properly spaced QMD file
+qmd_content <- c(
+  "---",
+  "title: \"Clinical Study Report\"",
+  "author: \"Study Team\"",
+  "format: docx",
+  "---",
+  "",
+  "# Executive Summary",
+  "",
+  "This is the executive summary section.",
+  "",
+  "# Study Design",
+  "",
+  "This section describes the study design and methodology.",
+  "",
+  "# Results",
+  "",
+  "## Primary Endpoint",
+  "",
+  "Results of the primary endpoint analysis will go here.",
+  "",
+  "## Secondary Endpoints",
+  "",
+  "Secondary endpoint results will be presented in this section.",
+  "",
+  "# Conclusions",
+  "",
+  "Study conclusions and interpretation."
+)
+
+# Write the properly formatted version
+writeLines(qmd_content, "templates/simple_csr.qmd")
+
+# Render it to Word
+system("quarto render templates/simple_csr.qmd")
+
+# Extract from the newly rendered Word doc
+word_text_new <- extract_word_text("templates/simple_csr.docx")
+cat("Word document now contains", length(word_text_new), "paragraphs:\n")
+for (i in seq_along(word_text_new)) {
+  cat(i, ":", word_text_new[i], "\n")
+}
+
+# Update our QMD parser to handle the properly spaced version
+qmd_structure_clean <- parse_qmd_structure_v2("templates/simple_csr.qmd")
+cat("QMD sections found:", length(qmd_structure_clean), "\n")
+
+# Extract the edited Word text
+word_text_edited <- extract_word_text("templates/simple_csr.docx")
+
+# Test the alignment
+clean_alignments_new <- align_word_to_qmd_clean(word_text_edited, qmd_structure_clean)
+
+# Check the alignments
+for (i in seq_along(clean_alignments_new)) {
+  cat("\nAlignment", i, ":\n")
+  cat("Original:", clean_alignments_new[[i]]$original_text, "\n")
+  cat("Revised: ", clean_alignments_new[[i]]$revised_text, "\n")
+  cat("Score:   ", clean_alignments_new[[i]]$similarity_score, "\n")
+}
+
+#' Parse QMD file separating headers from content
+#' @param qmd_path Path to QMD file
+#' @return List with text blocks and their locations
+parse_qmd_structure_v3 <- function(qmd_path) {
+  lines <- readLines(qmd_path)
+
+  components <- list()
+  in_yaml <- FALSE
+  in_code_chunk <- FALSE
+
+  for (i in seq_along(lines)) {
+    line <- lines[i]
+
+    # Handle YAML boundaries
+    if (line == "---") {
+      in_yaml <- !in_yaml
+      next
+    }
+
+    # Skip YAML and code chunks
+    if (in_yaml || in_code_chunk) {
+      if (grepl("^```", line)) in_code_chunk <- !in_code_chunk
+      next
+    }
+
+    # Check for code chunk start
+    if (grepl("^```", line)) {
+      in_code_chunk <- TRUE
+      next
+    }
+
+    # Skip empty lines
+    if (!nzchar(trimws(line))) next
+
+    # Process non-empty lines
+    if (grepl("^#+\\s+", line)) {
+      # This is a header - treat as separate component
+      components[[length(components) + 1]] <- list(
+        type = "header",
+        content = line,
+        start_line = i,
+        end_line = i
+      )
+    } else {
+      # This is content - treat as separate component
+      components[[length(components) + 1]] <- list(
+        type = "text",
+        content = line,
+        start_line = i,
+        end_line = i
+      )
+    }
+  }
+
+  return(components)
+}
+
+# Test the new parser that separates headers from content
+qmd_structure_v3 <- parse_qmd_structure_v3("templates/simple_csr.qmd")
+cat("Components found:", length(qmd_structure_v3), "\n\n")
+
+# Show each component
+for (i in seq_along(qmd_structure_v3)) {
+  cat("Component", i, "(", qmd_structure_v3[[i]]$type, "):", qmd_structure_v3[[i]]$content, "\n")
+}
+
+
+#' Align Word text with QMD structure (handling headers and text separately)
+#' @param word_text Character vector from extract_word_text()
+#' @param qmd_structure List from parse_qmd_structure_v3()
+#' @return List of alignments between Word and QMD
+align_word_to_qmd_v3 <- function(word_text, qmd_structure) {
+  alignments <- list()
+
+  # Filter for both text and header components
+  content_blocks <- qmd_structure[sapply(qmd_structure, function(x) x$type %in% c("text", "header"))]
+
+  for (i in seq_along(content_blocks)) {
+    qmd_block <- content_blocks[[i]]
+
+    # Clean the QMD content for better matching
+    qmd_content_clean <- clean_text_for_matching(qmd_block$content)
+
+    # Calculate similarity with each Word paragraph
+    similarities <- sapply(word_text, function(word_para) {
+      word_content_clean <- clean_text_for_matching(word_para)
+
+      # Convert both to lowercase and split into words
+      qmd_words <- tolower(strsplit(qmd_content_clean, "\\s+")[[1]])
+      word_words <- tolower(strsplit(word_content_clean, "\\s+")[[1]])
+
+      # Count shared words
+      shared_words <- sum(qmd_words %in% word_words)
+      total_qmd_words <- length(qmd_words)
+
+      # Return similarity score (shared words / QMD words)
+      # This fixes the >1.0 scores we were seeing
+      if (total_qmd_words > 0) shared_words / total_qmd_words else 0
+    })
+
+    # Find the Word paragraph with highest similarity
+    best_match_idx <- which.max(similarities)
+
+    alignments[[i]] <- list(
+      qmd_block = i,
+      qmd_type = qmd_block$type,
+      qmd_lines = qmd_block$start_line:qmd_block$end_line,
+      original_text = qmd_block$content,
+      revised_text = word_text[best_match_idx],
+      similarity_score = similarities[best_match_idx]
+    )
+  }
+
+  return(alignments)
+}
+
+# Test the new alignment with v3 parser and v3 aligner
+alignments_v3 <- align_word_to_qmd_v3(word_text_edited, qmd_structure_v3)
+
+# Check the results
+for (i in seq_along(alignments_v3)) {
+  cat("\nAlignment", i, "(", alignments_v3[[i]]$qmd_type, "):\n")
+  cat("Original:", alignments_v3[[i]]$original_text, "\n")
+  cat("Revised: ", alignments_v3[[i]]$revised_text, "\n")
+  cat("Score:   ", alignments_v3[[i]]$similarity_score, "\n")
+}
+
+#' Complete round-trip workflow using improved parsing and alignment
+#' @param qmd_path Path to QMD file
+#' @param word_path Path to edited Word document
+#' @param backup Should we create a backup? (default TRUE)
+#' @return TRUE if successful
+quartoword_update_final <- function(qmd_path, word_path, backup = TRUE) {
+
+  # Safety first - create backup of original QMD
+  if (backup) {
+    backup_path <- paste0(qmd_path, ".backup")
+    file.copy(qmd_path, backup_path, overwrite = TRUE)
+    cat("Created backup:", backup_path, "\n")
+  }
+
+  cat("🔄 Starting quartoword round-trip update...\n\n")
+
+  # Step 1: Parse the original QMD structure (using v3 parser)
+  cat("📖 Parsing QMD structure...\n")
+  qmd_structure <- parse_qmd_structure_v3(qmd_path)
+  cat("Found", length(qmd_structure), "components\n\n")
+
+  # Step 2: Extract text from edited Word document
+  cat("📄 Extracting Word document text...\n")
+  word_text <- extract_word_text(word_path)
+  cat("Extracted", length(word_text), "paragraphs\n\n")
+
+  # Step 3: Align Word text with QMD structure (using v3 aligner)
+  cat("🎯 Aligning Word text with QMD structure...\n")
+  alignments <- align_word_to_qmd_v3(word_text, qmd_structure)
+  cat("Created", length(alignments), "alignments\n\n")
+
+  # Step 4: Update the QMD file
+  cat("✏️  Updating QMD file with revisions...\n")
+  update_qmd_with_revisions(qmd_path, alignments)
+
+  cat("✅ Round-trip complete! Your QMD file has been updated.\n")
+  cat("💡 You can now re-render to see changes with fresh data.\n")
+
+  return(TRUE)
+}
+
+# Make sure we have your edit in the Word document, then run the complete workflow
+quartoword_update_final("templates/simple_csr.qmd", "templates/simple_csr.docx")
+
+# Check the results
+cat("\nUpdated QMD file:\n")
+updated_content <- readLines("templates/simple_csr.qmd")
+for (i in seq_along(updated_content)) {
+  cat(i, ":", updated_content[i], "\n")
+}
+
+# Re-render to see the final result
+system("quarto render templates/simple_csr.qmd")
