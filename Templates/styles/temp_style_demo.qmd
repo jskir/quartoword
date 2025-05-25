@@ -1,0 +1,28 @@
+---
+title: 'Style Reference Template for Clinical Reviews'
+format: docx
+---
+
+# Style Reference Document
+
+This document defines the visual styles used in clinical document reviews.
+
+## Normal Text
+
+This is normal, editable text that reviewers should feel comfortable editing.
+
+## Protected Parameters
+
+Protected parameters should have a light blue background: [PROTECTED PARAMETER EXAMPLE]{custom-style="ProtectedParam"}
+
+## Cross References
+
+Cross references should be gray and discourage editing: [Table 1 - Demographics]{custom-style="CrossReference"}
+
+## Reviewer Instructions
+
+Instructions should be in a bordered box: [REVIEWER GUIDANCE: Edit only normal black text]{custom-style="ReviewerInstructions"}
+
+## Included Content
+
+Content from included files should have a pale background: [This text came from an included file]{custom-style="IncludedContent"}
