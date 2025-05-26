@@ -1,0 +1,14 @@
+---
+title: 'Exact Style Test'
+format:
+  docx:
+    reference-doc: ../styles/clinical-review-template.docx
+---
+
+Normal text here.
+
+This is [protected content]{custom-style="ProtectedParam"}.
+
+This is a [cross reference]{custom-style="CrossReference"}.
+
+This is [reviewer guidance]{custom-style="ReviewerInstructions"}.

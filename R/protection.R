@@ -165,3 +165,96 @@ simple_protected_content <- c(
 # Write and test
 writeLines(simple_protected_content, "templates/test-docs/simple_protected.qmd")
 system("quarto render templates/test-docs/simple_protected.qmd")
+
+# Create a minimal working test without parameters
+simple_test_content <- c(
+  "---",
+  "title: 'Simple Style Test'",
+  "format: docx",
+  "---",
+  "",
+  "Normal text here.",
+  "",
+  "This is [protected content]{.protected-param}.",
+  "",
+  "This is a [cross reference]{.cross-reference}."
+)
+
+writeLines(simple_test_content, "templates/test-docs/simple_style_test.qmd")
+system("quarto render templates/test-docs/simple_style_test.qmd")
+
+# Check what styles actually exist in your Word template
+# We can create a test that uses the exact custom-style syntax
+
+exact_style_test <- c(
+  "---",
+  "title: 'Exact Style Test'",
+  "format:",
+  "  docx:",
+  "    reference-doc: templates/styles/clinical-review-template.docx",
+  "---",
+  "",
+  "Normal text here.",
+  "",
+  "This is [protected content]{custom-style=\"ProtectedParam\"}.",
+  "",
+  "This is a [cross reference]{custom-style=\"CrossReference\"}.",
+  "",
+  "This is [reviewer guidance]{custom-style=\"ReviewerInstructions\"}."
+)
+
+writeLines(exact_style_test, "templates/test-docs/exact_style_test.qmd")
+system("quarto render templates/test-docs/exact_style_test.qmd")
+
+# Check what's in the styles directory
+list.files("templates/styles", full.names = TRUE)
+
+# Also check the current directory in case it saved elsewhere
+list.files(pattern = "clinical-review-template.docx", recursive = TRUE)
+
+
+# Test with basic Word highlighting that doesn't require custom styles
+basic_highlight_test <- c(
+  "---",
+  "title: 'Basic Highlight Test'",
+  "format: docx",
+  "---",
+  "",
+  "Normal text.",
+  "",
+  "**Bold text** and *italic text*.",
+  "",
+  "Some `code text` that should look different."
+)
+
+writeLines(basic_highlight_test, "templates/test-docs/basic_test.qmd")
+system("quarto render templates/test-docs/basic_test.qmd")
+
+
+# Alternative: Use officer to inspect your template
+if (requireNamespace("officer", quietly = TRUE)) {
+  doc <- officer::read_docx("templates/styles/clinical-review-template.docx")
+  styles_info <- officer::styles_info(doc)
+  print(styles_info$style_name)  # Show all available style names
+}
+
+# Fix the path in the YAML to be relative to the QMD file location
+exact_style_test_fixed <- c(
+  "---",
+  "title: 'Exact Style Test'",
+  "format:",
+  "  docx:",
+  "    reference-doc: ../styles/clinical-review-template.docx",  # Go up one level, then to styles
+  "---",
+  "",
+  "Normal text here.",
+  "",
+  "This is [protected content]{custom-style=\"ProtectedParam\"}.",
+  "",
+  "This is a [cross reference]{custom-style=\"CrossReference\"}.",
+  "",
+  "This is [reviewer guidance]{custom-style=\"ReviewerInstructions\"}."
+)
+
+writeLines(exact_style_test_fixed, "templates/test-docs/exact_style_test.qmd")
+system("quarto render templates/test-docs/exact_style_test.qmd")

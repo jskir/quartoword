@@ -1,0 +1,44 @@
+---
+title: 'Clinical Study Report - Protected Content Test'
+format:
+  docx:
+    reference-doc: templates/styles/clinical-review-template.docx
+params:
+  compound_name: 'ABC-123'
+  n_subjects: '245'
+  study_phase: 'Phase III'
+---
+
+::: {.reviewer-instructions}
+**REVIEWER GUIDANCE:** Content with blue backgrounds contains data placeholders and cannot be edited. Content with gray text contains cross-references. Please edit only normal black text. Questions? Contact the statistical programming team.
+:::
+
+# Executive Summary
+
+This [{{< param study_phase >}}]{.protected-param} study evaluated [{{< param compound_name >}}]{.protected-param} in [{{< param n_subjects >}}]{.protected-param} subjects with advanced disease.
+
+**EDITABLE:** Please review the following summary for medical accuracy and completeness:
+
+The study met its primary endpoint and demonstrated clinically meaningful benefit. The safety profile was consistent with the known profile of the drug class.
+
+# Study Design
+
+This was a randomized, double-blind, placebo-controlled study of [{{< param compound_name >}}]{.protected-param}.
+
+**EDITABLE:** Please add any important design considerations:
+
+The study design was appropriate for the research question and regulatory requirements.
+
+# Results
+
+Demographics are presented in [Table 1 - Demographics]{.cross-reference}.
+
+**EDITABLE:** Please provide clinical interpretation:
+
+The results support the efficacy of the treatment approach.
+
+Efficacy results are shown in [Figure 1 - Kaplan-Meier Plot]{.cross-reference}.
+
+**EDITABLE:** Please review and edit as needed:
+
+The treatment effect was statistically significant and clinically meaningful.

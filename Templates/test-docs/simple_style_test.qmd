@@ -1,0 +1,10 @@
+---
+title: 'Simple Style Test'
+format: docx
+---
+
+Normal text here.
+
+This is [protected content]{.protected-param}.
+
+This is a [cross reference]{.cross-reference}.

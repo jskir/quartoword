@@ -1,0 +1,12 @@
+---
+title: 'Simple Protected Content Test'
+format: docx
+---
+
+# Test Document
+
+This is normal editable text.
+
+This is [PROTECTED CONTENT]{.protected-param} that should be highlighted.
+
+This is a [Cross Reference]{.cross-reference} that should be gray.

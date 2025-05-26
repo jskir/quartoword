@@ -1,0 +1,10 @@
+---
+title: 'Basic Highlight Test'
+format: docx
+---
+
+Normal text.
+
+**Bold text** and *italic text*.
+
+Some `code text` that should look different.
