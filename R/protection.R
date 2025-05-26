@@ -277,3 +277,129 @@ cat("After editing:\n")
 for (i in seq_along(edited_styled_text)) {
   cat(i, ":", edited_styled_text[i], "\n")
 }
+
+# Add to R/protection.R - a function that knows what should be protected
+detect_inappropriate_edits <- function(original_qmd_path, edited_word_text) {
+
+  # Read the original QMD to identify protected elements
+  qmd_lines <- readLines(original_qmd_path)
+
+  # Find lines with protected content markers
+  protected_patterns <- c(
+    "\\{custom-style=\"ProtectedParam\"\\}",
+    "\\{custom-style=\"CrossReference\"\\}",
+    "\\{\\{< param .*? >\\}\\}"  # Parameter placeholders
+  )
+
+  warnings <- list()
+
+  # Extract just the text that should be protected
+  for (line in qmd_lines) {
+    # Look for protected content patterns
+    if (grepl("\\{custom-style=\"ProtectedParam\"\\}", line)) {
+      # Extract the text between brackets: [protected content]{custom-style="ProtectedParam"}
+      protected_text <- gsub(".*\\[(.*)\\]\\{custom-style.*", "\\1", line)
+
+      # Check if this text was modified in Word
+      found_in_word <- any(grepl(protected_text, edited_word_text, fixed = TRUE))
+
+      if (!found_in_word) {
+        warnings[[length(warnings) + 1]] <- paste(
+          "WARNING: Protected content may have been edited:", protected_text
+        )
+      }
+    }
+  }
+
+  return(warnings)
+}
+
+# Test this detection
+warnings <- detect_inappropriate_edits("templates/test-docs/exact_style_test.qmd", edited_styled_text)
+if (length(warnings) > 0) {
+  cat("⚠️  PROTECTION VIOLATIONS DETECTED:\n")
+  for (w in warnings) {
+    cat("  ", w, "\n")
+  }
+} else {
+  cat("✅ No protection violations detected\n")
+}
+
+# Debug the detection step by step
+original_qmd <- readLines("templates/test-docs/exact_style_test.qmd")
+cat("Original QMD content:\n")
+for (i in seq_along(original_qmd)) {
+  cat(i, ":", original_qmd[i], "\n")
+}
+
+cat("\nLooking for protected content lines:\n")
+for (line in original_qmd) {
+  if (grepl("\\{custom-style=\"ProtectedParam\"\\}", line)) {
+    cat("Found protected line:", line, "\n")
+
+    # Extract the protected text
+    protected_text <- gsub(".*\\[(.*)\\]\\{custom-style.*", "\\1", line)
+    cat("Extracted protected text:", protected_text, "\n")
+
+    # Check if it exists unchanged in Word
+    found_exact <- any(grepl(protected_text, edited_styled_text, fixed = TRUE))
+    cat("Found exact match in Word:", found_exact, "\n")
+
+    # Check what we actually have in Word
+    cat("Word text containing 'protected':\n")
+    for (word_line in edited_styled_text) {
+      if (grepl("protected", word_line, ignore.case = TRUE)) {
+        cat("  Word:", word_line, "\n")
+      }
+    }
+  }
+}
+
+# Fixed detection function
+detect_inappropriate_edits_v2 <- function(original_qmd_path, edited_word_text) {
+  qmd_lines <- readLines(original_qmd_path)
+  warnings <- list()
+
+  for (line in qmd_lines) {
+    if (grepl("\\{custom-style=\"ProtectedParam\"\\}", line)) {
+      # Extract the original protected text
+      protected_text <- gsub(".*\\[(.*)\\]\\{custom-style.*", "\\1", line)
+
+      # Find the corresponding line in Word document
+      # Look for lines that contain this protected text
+      word_matches <- edited_word_text[grepl(protected_text, edited_word_text, fixed = TRUE)]
+
+      if (length(word_matches) > 0) {
+        for (word_match in word_matches) {
+          # Check if the Word version has EXTRA content beyond the original
+          # Remove the original protected text and see what's left
+          remaining_text <- gsub(protected_text, "", word_match, fixed = TRUE)
+
+          # If there's significant remaining text (more than just punctuation/spaces)
+          if (nzchar(trimws(gsub("[[:punct:][:space:]]", "", remaining_text)))) {
+            warnings[[length(warnings) + 1]] <- paste(
+              "⚠️  Protected content modified:",
+              "\n    Original:", protected_text,
+              "\n    In Word: ", word_match,
+              "\n    Added text:", trimws(remaining_text)
+            )
+          }
+        }
+      }
+    }
+  }
+
+  return(warnings)
+}
+
+# Test the corrected detection
+warnings_v2 <- detect_inappropriate_edits_v2("templates/test-docs/exact_style_test.qmd", edited_styled_text)
+
+if (length(warnings_v2) > 0) {
+  cat("⚠️  PROTECTION VIOLATIONS DETECTED:\n")
+  for (w in warnings_v2) {
+    cat(w, "\n\n")
+  }
+} else {
+  cat("✅ No protection violations detected\n")
+}
