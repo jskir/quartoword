@@ -1,0 +1,14 @@
+---
+title: 'Simple R Parameter Test'
+format: docx
+engine: knitr
+params:
+  compound_name: 'ABC-123'
+  n_subjects: 245
+---
+
+# Basic R Parameters
+
+The study used `r params$compound_name` in `r params$n_subjects` subjects.
+
+This should render the actual values, not the code.

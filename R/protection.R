@@ -450,3 +450,135 @@ quartoword_update_with_protection <- function(qmd_path, word_path, backup = TRUE
   cat("\n🎉 Round-trip complete with protection checking!\n")
   return(TRUE)
 }
+
+
+# Enhanced detection function for both parameter syntaxes
+detect_inappropriate_edits_v3 <- function(original_qmd_path, edited_word_text) {
+  qmd_lines <- readLines(original_qmd_path)
+  warnings <- list()
+
+  for (line in qmd_lines) {
+    # Pattern 1: Quarto shortcode parameters with protection
+    if (grepl("\\[\\{\\{< param .*? >\\}\\]\\{.*protected.*\\}", line)) {
+      # Extract: [{{< param compound_name >}}]{.protected-param}
+      protected_text <- gsub(".*\\[(\\{\\{< param .*? >\\}\\})\\]\\{.*", "\\1", line)
+
+      # The rendered value would be the parameter value, not the syntax
+      # We need to check what this renders to...
+      warnings <- c(warnings, check_parameter_modification(line, edited_word_text, "quarto"))
+    }
+
+    # Pattern 2: R inline parameters with protection
+    if (grepl("\\[`r params\\$.*?`\\]\\{.*protected.*\\}", line)) {
+      # Extract: [`r params$compound_name`]{.protected-param}
+      protected_text <- gsub(".*\\[(`r params\\$.*?`)\\]\\{.*", "\\1", line)
+
+      warnings <- c(warnings, check_parameter_modification(line, edited_word_text, "r_inline"))
+    }
+
+    # Pattern 3: Custom style syntax (our current working version)
+    if (grepl("\\{custom-style=\"ProtectedParam\"\\}", line)) {
+      protected_text <- gsub(".*\\[(.*)\\]\\{custom-style.*", "\\1", line)
+
+      word_matches <- edited_word_text[grepl(protected_text, edited_word_text, fixed = TRUE)]
+
+      if (length(word_matches) > 0) {
+        for (word_match in word_matches) {
+          remaining_text <- gsub(protected_text, "", word_match, fixed = TRUE)
+
+          if (nzchar(trimws(gsub("[[:punct:][:space:]]", "", remaining_text)))) {
+            warnings[[length(warnings) + 1]] <- paste(
+              "⚠️  Protected content modified:",
+              "\n    Original:", protected_text,
+              "\n    In Word: ", word_match,
+              "\n    Added text:", trimws(remaining_text)
+            )
+          }
+        }
+      }
+    }
+  }
+
+  return(warnings)
+}
+
+# Helper function to check parameter modifications
+check_parameter_modification <- function(qmd_line, word_text, param_type) {
+  # This is tricky because we need to know what the parameter RENDERED to
+  # For now, let's create a placeholder that we can enhance
+
+  cat("DEBUG: Found", param_type, "parameter in line:", qmd_line, "\n")
+
+  # TODO: We'll need to either:
+  # 1. Parse the YAML to get parameter values, or
+  # 2. Compare with a "clean" rendered version
+
+  return(character(0))  # No warnings for now
+}
+
+# Install the required packages for R integration
+install.packages(c("knitr", "rmarkdown"))
+
+create_simple_r_test <- function(file_path = "templates/test-docs/simple_r_test.qmd") {
+
+  content <- c(
+    "---",
+    "title: 'Simple R Parameter Test'",
+    "format: docx",
+    "engine: knitr",
+    "params:",
+    "  compound_name: 'ABC-123'",
+    "  n_subjects: 245",
+    "---",
+    "",
+    "# Basic R Parameters",
+    "",
+    "The study used `r params$compound_name` in `r params$n_subjects` subjects.",
+    "",
+    "This should render the actual values, not the code."
+  )
+
+  writeLines(content, file_path)
+  cat("Created simple R test:", file_path, "\n")
+  return(TRUE)
+}
+
+# Test basic R functionality first
+create_simple_r_test()
+system("quarto render templates/test-docs/simple_r_test.qmd")
+
+create_working_dual_syntax_test <- function(file_path = "templates/test-docs/working_dual_syntax.qmd") {
+
+  content <- c(
+    "---",
+    "title: 'Working Dual Parameter Syntax Test'",
+    "format:",
+    "  docx:",
+    "    reference-doc: ../styles/clinical-review-template.docx",
+    "engine: knitr",  # Tell Quarto this uses R
+    "params:",
+    "  compound_name: 'ABC-123'",
+    "  n_subjects: 245",
+    "  study_phase: 'Phase III'",
+    "---",
+    "",
+    "# Testing R Inline Parameters",
+    "",
+    "The study enrolled [`r params$n_subjects`]{custom-style=\"ProtectedParam\"} subjects.",
+    "",
+    "The compound [`r params$compound_name`]{custom-style=\"ProtectedParam\"} was tested in a [`r params$study_phase`]{custom-style=\"ProtectedParam\"} trial.",
+    "",
+    "**EDITABLE:** Please review:",
+    "",
+    "The R inline parameter approach allows for dynamic content."
+  )
+
+  writeLines(content, file_path)
+  cat("Created working dual syntax test:", file_path, "\n")
+  return(TRUE)
+}
+
+# Test the R-enabled version
+create_working_dual_syntax_test()
+system("quarto render templates/test-docs/working_dual_syntax.qmd")
+

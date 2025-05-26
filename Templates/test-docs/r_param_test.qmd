@@ -1,0 +1,18 @@
+---
+title: 'R Parameter Protection Test'
+format:
+  docx:
+    reference-doc: ../styles/clinical-review-template.docx
+params:
+  compound_name: 'ABC-123'
+  n_subjects: 245
+  study_phase: 'Phase III'
+---
+
+# Study Summary
+
+This [`r params$study_phase`]{.protected-param} study evaluated [`r params$compound_name`]{.protected-param} in [`r params$n_subjects`]{.protected-param} subjects.
+
+**EDITABLE:** Please review for clinical accuracy:
+
+The study demonstrated significant efficacy.

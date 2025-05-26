@@ -1,0 +1,20 @@
+---
+title: 'Dual Parameter Syntax Test'
+format:
+  docx:
+    reference-doc: ../styles/clinical-review-template.docx
+params:
+  compound_name: 'ABC-123'
+  n_subjects: 245
+  study_phase: 'Phase III'
+---
+
+# Testing Both Syntaxes
+
+**Quarto shortcode:** This [{{< param study_phase >}}]{custom-style="ProtectedParam"} study used [{{< param compound_name >}}]{custom-style="ProtectedParam"}.
+
+**R inline code:** The study enrolled [`r params$n_subjects`]{custom-style="ProtectedParam"} subjects taking [`r params$compound_name`]{custom-style="ProtectedParam"}.
+
+**EDITABLE:** Please review:
+
+Both parameter approaches work in this test document.
