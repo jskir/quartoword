@@ -403,3 +403,50 @@ if (length(warnings_v2) > 0) {
 } else {
   cat("✅ No protection violations detected\n")
 }
+
+# Enhanced workflow with protection checking
+quartoword_update_with_protection <- function(qmd_path, word_path, backup = TRUE) {
+
+  if (backup) {
+    backup_path <- paste0(qmd_path, ".backup")
+    file.copy(qmd_path, backup_path, overwrite = TRUE)
+    cat("✅ Created backup:", backup_path, "\n")
+  }
+
+  cat("\n🔄 Starting quartoword round-trip with protection checking...\n\n")
+
+  # STEP 0: Check for protection violations FIRST
+  cat("🛡️  Checking for protection violations...\n")
+  word_text <- extract_word_text(word_path)
+  violations <- detect_inappropriate_edits_v2(qmd_path, word_text)
+
+  if (length(violations) > 0) {
+    cat("⚠️  PROTECTION VIOLATIONS FOUND:\n")
+    for (v in violations) {
+      cat(v, "\n\n")
+    }
+    cat("❓ Do you want to continue anyway? These edits will be LOST.\n")
+    cat("   Type 'yes' to continue or anything else to abort: ")
+
+    user_response <- readline()
+    if (tolower(trimws(user_response)) != "yes") {
+      cat("❌ Update cancelled. Please review protected content edits.\n")
+      return(FALSE)
+    }
+  } else {
+    cat("✅ No protection violations detected\n\n")
+  }
+
+  # Continue with normal workflow...
+  cat("📖 Parsing QMD structure...\n")
+  qmd_structure <- parse_qmd_structure(qmd_path)
+  cat("   Found", length(qmd_structure), "components\n\n")
+
+  # ... rest of workflow
+  cat("🎯 Aligning and updating...\n")
+  alignments <- align_word_to_qmd(word_text, qmd_structure)
+  update_qmd_with_revisions(qmd_path, alignments)
+
+  cat("\n🎉 Round-trip complete with protection checking!\n")
+  return(TRUE)
+}
