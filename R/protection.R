@@ -258,3 +258,22 @@ exact_style_test_fixed <- c(
 
 writeLines(exact_style_test_fixed, "templates/test-docs/exact_style_test.qmd")
 system("quarto render templates/test-docs/exact_style_test.qmd")
+
+# First, let's see what our extraction picks up from the styled document
+source("R/core.R")
+
+# Extract text from the styled Word document
+styled_word_text <- extract_word_text("templates/test-docs/exact_style_test.docx")
+
+cat("Styled document contains", length(styled_word_text), "paragraphs:\n")
+for (i in seq_along(styled_word_text)) {
+  cat(i, ":", styled_word_text[i], "\n")
+}
+
+# Extract from the edited version
+edited_styled_text <- extract_word_text("templates/test-docs/exact_style_test.docx")
+
+cat("After editing:\n")
+for (i in seq_along(edited_styled_text)) {
+  cat(i, ":", edited_styled_text[i], "\n")
+}
