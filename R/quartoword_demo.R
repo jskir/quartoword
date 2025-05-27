@@ -144,42 +144,73 @@ align_word_to_qmd <- function(word_text, qmd_structure) {
   return(alignments)
 }
 
-#' Update QMD file with revised text from alignments
+#' Update QMD file with revised text from alignments (preserving markup)
 #' @param qmd_path Path to original QMD file
 #' @param alignments List from align_word_to_qmd()
 #' @return TRUE if successful
-update_qmd_with_revisions_smart <- function(qmd_path, alignments) {
+update_qmd_with_revisions <- function(qmd_path, alignments) {
   original_lines <- readLines(qmd_path)
   updated_lines <- original_lines
 
   for (alignment in alignments) {
-    # Use our cleaning function to compare CONTENT, not markup
+    # Use cleaning function to compare CONTENT, not markup
     original_clean <- clean_text_for_matching(alignment$original_text)
     revised_clean <- clean_text_for_matching(alignment$revised_text)
 
-    # Only update if the ACTUAL CONTENT changed (not just markup)
+    # Only update if there's a meaningful content difference
+    # High similarity score = probably just markup loss, not real edit
     if (original_clean != revised_clean && alignment$similarity_score < 0.95) {
       line_number <- alignment$qmd_lines[1]
 
       cat("Real content change detected on line", line_number, "\n")
-      cat("  Original content:", original_clean, "\n")
-      cat("  Revised content: ", revised_clean, "\n\n")
+      cat("  Original:", original_clean, "\n")
+      cat("  Revised: ", revised_clean, "\n\n")
 
-      # PRESERVE MARKUP: Only replace the content, keep the structure
-      # This is the key - we need to intelligently merge the changes
-      updated_lines[line_number] <- merge_content_preserve_markup(
-        alignment$original_text,
-        alignment$revised_text
-      )
+      # Try to preserve markup by doing intelligent replacement
+      updated_text <- preserve_markup_during_update(alignment$original_text, alignment$revised_text)
+      updated_lines[line_number] <- updated_text
+
+    } else if (original_clean != revised_clean) {
+      cat("Minor change detected on line", alignment$qmd_lines[1], "- preserving markup\n")
     } else {
-      cat("Markup-only change detected, preserving original line", alignment$qmd_lines[1], "\n")
+      cat("No content change on line", alignment$qmd_lines[1], "\n")
     }
   }
 
   writeLines(updated_lines, qmd_path)
+  cat("Successfully updated", qmd_path, "\n")
   return(TRUE)
 }
 
+#' Preserve markup while updating content
+#' @param original_qmd_text Original line from QMD with markup
+#' @param revised_word_text Revised line from Word (no markup)
+#' @return Updated text with markup preserved
+preserve_markup_during_update <- function(original_qmd_text, revised_word_text) {
+
+  # If the original has no markup, just return the revised text
+  if (!grepl("\\{custom-style=", original_qmd_text)) {
+    return(revised_word_text)
+  }
+
+  # For lines with markup, try to preserve it
+  # Extract the clean content from both
+  original_clean <- clean_text_for_matching(original_qmd_text)
+  revised_clean <- clean_text_for_matching(revised_word_text)
+
+  # If content is very similar, keep original (likely just markup loss)
+  content_similarity <- sum(strsplit(original_clean, "\\s+")[[1]] %in% strsplit(revised_clean, "\\s+")[[1]]) /
+    length(strsplit(original_clean, "\\s+")[[1]])
+
+  if (content_similarity > 0.8) {
+    cat("    High content similarity (", round(content_similarity, 2), ") - preserving original markup\n")
+    return(original_qmd_text)
+  }
+
+  # If content is substantially different, we have a real edit
+  cat("    Substantial content change - updating text (markup may be lost)\n")
+  return(revised_word_text)
+}
 # Protection System -------------------------------------------------------------
 
 #' Detect inappropriate edits to protected content
@@ -246,7 +277,7 @@ quartoword_update <- function(qmd_path, word_path, backup = TRUE) {
 
   # STEP 4: Update QMD
   cat("✏️  Updating QMD file with revisions...\n")
-  update_qmd_with_revisions_smart(qmd_path, alignments)
+  update_qmd_with_revisions(qmd_path, alignments)
 
   cat("\n🎉 Round-trip complete!\n")
   cat("💡 You can now re-render to incorporate changes with fresh data.\n\n")

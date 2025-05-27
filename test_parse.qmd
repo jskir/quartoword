@@ -1,0 +1,9 @@
+---
+title: 'Test'
+---
+
+# Header
+
+Normal text with [protected content]{custom-style="ProtectedParam"} here.
+
+Also test [{{< param compound >}}]{.protected-param} syntax.
