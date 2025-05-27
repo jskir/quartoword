@@ -1,0 +1,24 @@
+---
+title: 'Clinical Study Report - Demo'
+format:
+  docx:
+    reference-doc: templates/styles/clinical-review-template.docx
+---
+
+# Executive Summary
+
+This Phase III study evaluated [ABC-123]{custom-style="ProtectedParam"} in [245]{custom-style="ProtectedParam"} subjects with advanced disease.
+
+The study met its primary endpoint and demonstrated clinically meaningful benefit.
+
+# Study Design
+
+This was a randomized, double-blind, placebo-controlled study of [ABC-123]{custom-style="ProtectedParam"}.
+
+The study design was appropriate for the research question.
+
+# Results
+
+Demographics are presented in [Table 1]{custom-style="CrossReference"}.
+
+The results support the efficacy of the treatment approach.

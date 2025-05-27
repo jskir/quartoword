@@ -1,0 +1,24 @@
+---
+title: 'Clinical Study Report - Demo'
+format:
+  docx:
+    reference-doc: templates/styles/clinical-review-template.docx
+---
+
+# Executive Summary
+
+This Phase III study evaluated ABC-123 in 245 subjects with advanced disease.
+
+The study did not meet its primary endpoint and failed to demonstrate clinically meaningful benefit.
+
+# Study Design
+
+This was a randomized, double-blind, placebo-controlled study of ABC-123.
+
+The study design was appropriate for the research question.
+
+# Results
+
+Demographics are presented in Table 1.
+
+The results support the efficacy of the treatment approach.
