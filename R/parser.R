@@ -345,3 +345,131 @@ find_word_level_changes <- function(original_words, new_words) {
 
 # Test the AST updater
 updated_ast <- update_ast_with_changes(ast, editable, edited_word_text)
+
+
+# STARTING a WORD TRACKED CHANGES APPROACH--------------------------------
+
+test_content_tracking <- c(
+  "---",
+  "title: 'Tracked Changes Test'",
+  "format: docx",
+  "---",
+  "",
+  "# Test Document",
+  "",
+  "This is the original text that will be revised.",
+  "",
+  "The study met its primary endpoint successfully."
+)
+
+writeLines(test_content_tracking, "tracked_test.qmd")
+system("quarto render tracked_test.qmd")
+
+# Made edits in the docx file
+# Saved as tracked_text_edited.docx
+
+# Function to analyze tracked changes
+analyze_tracked_changes <- function(docx_path) {
+  library(officer)
+
+  cat("=== TRACKED CHANGES ANALYSIS ===\n")
+  cat("Document:", docx_path, "\n\n")
+
+  # Read the document
+  doc <- read_docx(docx_path)
+  content <- docx_summary(doc)
+
+  # Show all content types
+  cat("Content types found:\n")
+  print(table(content$content_type))
+  cat("\n")
+
+  # Show all columns available
+  cat("Available columns:\n")
+  print(colnames(content))
+  cat("\n")
+
+  # Look specifically at 'run' content (where text formatting/changes are tracked)
+  runs <- content[content$content_type == "run", ]
+
+  if (nrow(runs) > 0) {
+    cat("Text runs found:\n")
+    for (i in 1:min(10, nrow(runs))) {  # Show first 10 runs
+      cat("Run", i, ":\n")
+      cat("  Text:", if(!is.null(runs$text[i])) runs$text[i] else "NULL", "\n")
+
+      # Look for revision-related columns
+      for (col in colnames(runs)) {
+        if (grepl("revision|track|change|insert|delete", col, ignore.case = TRUE)) {
+          cat("  ", col, ":", runs[[col]][i], "\n")
+        }
+      }
+      cat("\n")
+    }
+  }
+
+  # Also check paragraph content
+  paras <- content[content$content_type == "paragraph", ]
+  cat("Paragraph content:\n")
+  if (nrow(paras) > 0) {
+    for (i in 1:min(5, nrow(paras))) {
+      cat("Para", i, ":", if(!is.null(paras$text[i])) paras$text[i] else "NULL", "\n")
+    }
+  }
+
+  return(content)
+}
+
+content <- analyze_tracked_changes('tracked_test_edited.docx')
+
+#Officer approach didn't work, trying the XML alternative
+
+# Direct XML analysis of tracked changes
+analyze_xml_changes <- function(docx_path) {
+  library(xml2)
+
+  cat("=== XML-LEVEL CHANGE ANALYSIS ===\n")
+
+  # Extract the document XML
+  temp_dir <- tempdir()
+  unzip(docx_path, exdir = temp_dir)
+
+  # Read the main document XML
+  doc_xml <- read_xml(file.path(temp_dir, "word", "document.xml"))
+
+  # Look for tracked change elements
+  # Word uses these XML elements for tracked changes:
+  # <w:ins> for insertions
+  # <w:del> for deletions
+
+  insertions <- xml_find_all(doc_xml, ".//w:ins")
+  deletions <- xml_find_all(doc_xml, ".//w:del")
+
+  cat("Found", length(insertions), "insertions\n")
+  cat("Found", length(deletions), "deletions\n\n")
+
+  if (length(insertions) > 0) {
+    cat("INSERTIONS:\n")
+    for (i in seq_along(insertions)) {
+      inserted_text <- xml_text(insertions[[i]])
+      author <- xml_attr(insertions[[i]], "author")
+      date <- xml_attr(insertions[[i]], "date")
+      cat("  Insert", i, ":", inserted_text, "(by:", author, "on:", date, ")\n")
+    }
+  }
+
+  if (length(deletions) > 0) {
+    cat("\nDELETIONS:\n")
+    for (i in seq_along(deletions)) {
+      deleted_text <- xml_text(deletions[[i]])
+      author <- xml_attr(deletions[[i]], "author")
+      date <- xml_attr(deletions[[i]], "date")
+      cat("  Delete", i, ":", deleted_text, "(by:", author, "on:", date, ")\n")
+    }
+  }
+
+  # Clean up
+  unlink(temp_dir, recursive = TRUE)
+}
+
+analyze_xml_changes('tracked_test_edited.docx')
