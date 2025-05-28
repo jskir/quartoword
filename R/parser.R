@@ -202,3 +202,146 @@ for (i in seq_along(word_text)) {
 editable_combined <- paste(sapply(editable, function(x) x$text), collapse = " ")
 cat("\nCombined editable text from QMD:", editable_combined, "\n")
 
+
+
+
+
+# After you edit the Word file, run this:
+edited_word_text <- extract_word_text("test_parse.docx")
+
+cat("Edited Word paragraphs:\n")
+for (i in seq_along(edited_word_text)) {
+  cat("Para", i, ":", edited_word_text[i], "\n")
+}
+
+cat("\nOriginal editable segments:\n")
+for (i in seq_along(editable)) {
+  cat("Segment", i, ":", editable[[i]]$text, "\n")
+}
+
+cat("\nCombined original editable:", paste(sapply(editable, function(x) x$text), collapse = " "), "\n")
+
+# Extract just the editable parts from the edited Word text
+# For now, let's manually compare Para 3 and Para 4 (the content paragraphs)
+cat("\nComparison:\n")
+cat("Original Para 3: Normal text with protected content here.\n")
+cat("Edited Para 3  :", edited_word_text[3], "\n")
+cat("Original Para 4: Also test  syntax.\n")
+cat("Edited Para 4  :", edited_word_text[4], "\n")
+
+
+
+
+detect_changes_with_ast <- function(original_editable_segments, edited_word_text) {
+  # Combine original editable text
+  original_combined <- paste(sapply(original_editable_segments, function(x) x$text), collapse = " ")
+
+  # Extract editable portions from Word text (skipping protected content)
+  # For now, we'll extract from the content paragraphs (paragraphs 3 and 4)
+  word_content_paras <- edited_word_text[3:4]
+
+  cat("CHANGE DETECTION:\n")
+  cat("Original editable:", original_combined, "\n")
+  cat("Word paragraphs  :", paste(word_content_paras, collapse = " "), "\n")
+
+  # Simple comparison for now
+  if (original_combined != paste(word_content_paras, collapse = " ")) {
+    cat("CHANGES DETECTED!\n")
+    return(TRUE)
+  } else {
+    cat("No changes detected.\n")
+    return(FALSE)
+  }
+}
+
+# Test it
+changes_found <- detect_changes_with_ast(editable, edited_word_text)
+
+
+
+
+
+
+
+# Update AST with detected changes while preserving structure
+update_ast_with_changes <- function(original_ast, original_editable_segments, edited_word_text) {
+
+  cat("=== AST RECONSTRUCTION ENGINE ===\n")
+
+  # Create a working copy of the AST (we don't want to modify the original)
+  updated_ast <- original_ast
+
+  # Extract the changed text from Word document
+  # For our test case, we know content is in paragraphs 3 and 4
+  word_content <- paste(edited_word_text[3:4], collapse = " ")
+
+  cat("Original editable text:", paste(sapply(original_editable_segments, function(x) x$text), collapse = " "), "\n")
+  cat("Word document text    :", word_content, "\n")
+
+  # TODO: This is where we need to map the changes back to specific AST nodes
+  # For now, let's identify what changed
+
+  # Simple tokenization approach for demonstration
+  original_words <- unlist(strsplit(paste(sapply(original_editable_segments, function(x) x$text), collapse = " "), "\\s+"))
+
+  # Extract just editable words from Word text (skip protected content)
+  # This is a simplified approach - we need to be more sophisticated
+  word_words <- extract_editable_words_from_word_text(word_content)
+
+  cat("Original words:", paste(original_words, collapse = ", "), "\n")
+  cat("Word words    :", paste(word_words, collapse = ", "), "\n")
+
+  # Find differences
+  changes <- find_word_level_changes(original_words, word_words)
+
+  if (length(changes) > 0) {
+    cat("Changes detected:\n")
+    for (change in changes) {
+      cat("  ", change$original, "→", change$new, "\n")
+    }
+  }
+
+  return(updated_ast)
+}
+
+# Helper function to extract editable words from Word text
+extract_editable_words_from_word_text <- function(word_text) {
+  # This is a placeholder - we need logic to skip protected content
+  # For our test, we know "protected content" should be skipped
+
+  # Remove known protected content
+  cleaned_text <- gsub("protected content", "", word_text)
+  # Remove parameter placeholders (they render as empty or specific values)
+  cleaned_text <- gsub("\\{\\{<.*?>\\}\\}", "", cleaned_text)
+
+  # Tokenize
+  words <- unlist(strsplit(trimws(cleaned_text), "\\s+"))
+  # Remove empty strings
+  words[words != ""]
+}
+
+# Helper function to find word-level changes
+find_word_level_changes <- function(original_words, new_words) {
+  changes <- list()
+
+  # Simple approach: find positions where words differ
+  max_len <- max(length(original_words), length(new_words))
+
+  for (i in 1:max_len) {
+    orig_word <- if (i <= length(original_words)) original_words[i] else ""
+    new_word <- if (i <= length(new_words)) new_words[i] else ""
+
+    if (orig_word != new_word) {
+      changes[[length(changes) + 1]] <- list(
+        position = i,
+        original = orig_word,
+        new = new_word
+      )
+    }
+  }
+
+  return(changes)
+}
+
+# Test the AST updater
+updated_ast <- update_ast_with_changes(ast, editable, edited_word_text)
