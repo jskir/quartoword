@@ -2,6 +2,7 @@
 test_content <- c(
   "---",
   "title: 'Test'",
+  "format: docx",  # Add this line to specify Word output
   "---",
   "",
   "# Header",
@@ -12,6 +13,13 @@ test_content <- c(
 )
 
 writeLines(test_content, "test_parse.qmd")
+
+# Now render to Word
+system("quarto render test_parse.qmd")
+
+# Check what files we have
+list.files(pattern = "test_parse")
+
 
 # Parse with Pandoc
 system("pandoc test_parse.qmd -t json -o test_parse.json")
@@ -179,3 +187,18 @@ cat("Found", length(editable), "editable text segments:\n")
 for (i in seq_along(editable)) {
   cat("Segment", i, ":", editable[[i]]$text, "\n")
 }
+
+# First, let's render our test file and see what Word gives us
+system("quarto render test_parse.qmd")
+
+# Extract from the rendered Word document
+word_text <- extract_word_text("test_parse.docx")
+cat("Word document paragraphs:\n")
+for (i in seq_along(word_text)) {
+  cat("Para", i, ":", word_text[i], "\n")
+}
+
+# Now let's combine our editable segments and see if they match
+editable_combined <- paste(sapply(editable, function(x) x$text), collapse = " ")
+cat("\nCombined editable text from QMD:", editable_combined, "\n")
+
