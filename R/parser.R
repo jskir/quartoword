@@ -473,3 +473,64 @@ analyze_xml_changes <- function(docx_path) {
 }
 
 analyze_xml_changes('tracked_test_edited.docx')
+
+
+#XML worked! Moving on
+
+# Enhanced XML analysis with context extraction
+analyze_xml_changes_with_context <- function(docx_path) {
+  library(xml2)
+
+  cat("=== ENHANCED XML CHANGE ANALYSIS ===\n")
+
+  # Extract XML
+  temp_dir <- tempdir()
+  unzip(docx_path, exdir = temp_dir)
+  doc_xml <- read_xml(file.path(temp_dir, "word", "document.xml"))
+
+  # Function to get surrounding text context
+  get_change_context <- function(change_node, context_words = 5) {
+    # Get the parent paragraph
+    parent_para <- xml_find_first(change_node, "ancestor::w:p")
+
+    if (!is.null(parent_para)) {
+      # Get all text in the paragraph
+      para_text <- xml_text(parent_para)
+
+      # Get position of change within paragraph
+      change_text <- xml_text(change_node)
+
+      return(list(
+        change_text = change_text,
+        full_paragraph = para_text,
+        paragraph_context = para_text  # We'll refine this
+      ))
+    }
+
+    return(list(change_text = xml_text(change_node), context = "Unknown"))
+  }
+}
+
+  # Analyze insertions with context
+  insertions <- xml_find_all(doc_xml, ".//w:ins")
+  cat("INSERTIONS WITH CONTEXT:\n")
+  for (i in seq_along(insertions)) {
+    context <- get_change_context(insertions[[i]])
+    author <- xml_attr(insertions[[i]], "author")
+
+    cat("Insert", i, ":\n")
+    cat("  Text:", context$change_text, "\n")
+    cat("  Full paragraph:", context$full_paragraph, "\n")
+    cat("  Author:", author, "\n\n")
+  }
+
+  # Analyze deletions with context
+  deletions <- xml_find_all(doc_xml, ".//w:del")
+  cat("DELETIONS WITH CONTEXT:\n")
+  for (i in seq_along(deletions)) {
+    context <- get_change_context(deletions[[i]])
+    author <- xml_attr(deletions[[i]], "author")
+
+    cat("Delete", i, ":\n")
+  }
+
