@@ -1,12 +1,11 @@
 # Functions for QMD reconstruction
-#apply_word_changes_to_qmd()           # First function
+#apply_word_changes_to_qmd()
 #reconstruct_ast_with_word_changes()
+#extract_editable_text_from_block()
 #production_qmd_reconstruction()
 #preserve_protected_content_in_update()
-#tokenize_text_to_ast_content()        # Last function
-#What about reconstruct_content_with_protected_preservation? NOT ADDED
-#What about identify_edited_blocks? NOT ADDED
-#What about extract_editable_text_from_block? NOT ADDED
+#tokenize_text_to_ast_content()
+
 
 
 # QMD Reconstruction Functions
@@ -144,6 +143,62 @@ reconstruct_ast_with_word_changes <- function(original_ast, editable_segments, t
 
   cat("  ✅ AST reconstruction complete\n")
   return(updated_ast)
+}
+
+#' Extract just the editable text from a single AST block
+#' @param block Single AST block
+#' @return String of editable text
+extract_editable_text_from_block <- function(block) {
+  editable_parts <- c()
+
+  extract_from_content <- function(content) {
+    if (is.list(content)) {
+      for (item in content) {
+        # Skip protected Span elements
+        if (is.list(item) && !is.null(item$t) && item$t == "Span") {
+          if (is_protected_span(item)) {
+            next  # Skip protected content
+          }
+        }
+
+        # Collect text strings
+        if (is.list(item) && !is.null(item$t) && item$t == "Str") {
+          editable_parts <<- c(editable_parts, item$c)
+        }
+
+        # Collect spaces
+        if (is.list(item) && !is.null(item$t) && item$t == "Space") {
+          editable_parts <<- c(editable_parts, " ")
+        }
+
+        # Recurse into nested content
+        if (is.list(item) && !is.null(item$c)) {
+          extract_from_content(item$c)
+        }
+      }
+    }
+  }
+
+  # Helper function to check if a Span is protected (same as before)
+  is_protected_span <- function(span_item) {
+    if (is.list(span_item$c) && length(span_item$c) >= 1) {
+      attrs <- span_item$c[[1]]
+      if (is.list(attrs) && length(attrs) >= 3) {
+        classes <- attrs[[2]]
+        custom_attrs <- attrs[[3]]
+
+        return("protected-param" %in% classes ||
+                 any(sapply(custom_attrs, function(x) length(x) >= 2 && x[[1]] == "custom-style")))
+      }
+    }
+    return(FALSE)
+  }
+
+  if (!is.null(block$c)) {
+    extract_from_content(block$c)
+  }
+
+  return(paste(editable_parts, collapse = ""))
 }
 
 
@@ -327,3 +382,6 @@ tokenize_text_to_ast_content <- function(text) {
 
   return(content)
 }
+
+
+

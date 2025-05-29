@@ -1,8 +1,8 @@
 # Functions for Word document processing
-#extract_word_text()                   # First function
+#extract_word_text()
+#clean_text_for_matching
 #analyze_xml_changes()
-#analyze_xml_changes_with_context()    MISSING
-#What about clean_text_for_matching?  NOT COPIED
+
 
 # These functions handle Word document processing and basic round-trip editing
 
@@ -22,6 +22,22 @@ extract_word_text <- function(docx_path) {
   return(paragraphs)
 }
 
+#' Clean text for similarity matching (removes formatting markup)
+#' @param text Character vector to clean
+#' @return Cleaned text string
+clean_text_for_matching <- function(text) {
+  clean_text <- paste(text, collapse = " ")
+
+  # Remove markdown and Quarto markup patterns
+  clean_text <- gsub("^#+\\s*", "", clean_text)                    # Headers
+  clean_text <- gsub("`[^`]*`", "", clean_text)                    # Inline code
+  clean_text <- gsub("\\{\\{<.*?>\\}\\}", "", clean_text)          # Shortcodes
+  clean_text <- gsub("\\{custom-style=\".*?\"\\}", "", clean_text) # Custom styles
+  clean_text <- gsub("@[a-zA-Z:()0-9-]*", "", clean_text)          # Cross-references
+
+  clean_text <- trimws(gsub("\\s+", " ", clean_text))
+  return(clean_text)
+}
 
 # For now, let's add the basic XML change analysis function from your shared code
 analyze_xml_changes <- function(docx_path) {
