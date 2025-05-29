@@ -1,0 +1,8 @@
+---
+title: 'Simple Test'
+format: docx
+---
+
+# Test
+
+Normal text with [protected]{custom-style="ProtectedParam"} content.

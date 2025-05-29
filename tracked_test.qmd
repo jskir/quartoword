@@ -1,0 +1,10 @@
+---
+title: 'Tracked Changes Test'
+format: docx
+---
+
+# Test Document
+
+This is the original text that will be revised.
+
+The study met its primary endpoint successfully.

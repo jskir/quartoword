@@ -1,0 +1,12 @@
+---
+title: 'Reconstruction Test'
+format: docx
+params:
+  n_patients: 245
+---
+
+# Clinical Report
+
+The study enrolled `r params$n_patients` patients with [documented disease]{custom-style="ProtectedParam"}.
+
+Results show significant improvement in the primary endpoint.

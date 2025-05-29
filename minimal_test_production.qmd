@@ -1,0 +1,8 @@
+---
+title: 'Minimal Test'
+format: docx
+---
+
+# Test Document
+
+This is MODIFIED TEXTeditable text with protected content here [protected content]{custom-style="ProtectedParam"} .
