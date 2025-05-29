@@ -3,6 +3,10 @@
 #reconstruct_ast_with_word_changes()
 #extract_editable_text_from_block()
 #production_qmd_reconstruction()
+#filter_word_content_paragraphs()
+#is_title_or_header()
+#find_matching_qmd_line()
+#calculate_text_similarity()
 #preserve_protected_content_in_update()
 #tokenize_text_to_ast_content()
 
@@ -202,7 +206,11 @@ extract_editable_text_from_block <- function(block) {
 }
 
 
-#' Create a production-ready reconstruction function based on the working approach
+#' Enhanced production reconstruction with better paragraph alignment
+#' @param original_qmd_path Path to original QMD file
+#' @param edited_docx_path Path to edited Word document
+#' @param output_qmd_path Path for output (if NULL, adds _updated suffix)
+#' @return TRUE if successful
 production_qmd_reconstruction <- function(original_qmd_path, edited_docx_path, output_qmd_path = NULL) {
 
   if (is.null(output_qmd_path)) {
@@ -230,18 +238,26 @@ production_qmd_reconstruction <- function(original_qmd_path, edited_docx_path, o
   cat("📖 Reading original QMD...\n")
   original_lines <- readLines(original_qmd_path)
 
-  # Step 3: Extract Word text
+  # Step 3: Extract Word text with debugging
   cat("📄 Extracting text from edited Word document...\n")
   tryCatch({
     word_text <- extract_word_text(edited_docx_path)
     cat("   Extracted", length(word_text), "paragraphs\n")
+
+    # Show what we extracted for debugging
+    cat("   Word paragraphs:\n")
+    for (i in seq_along(word_text)) {
+      if (nchar(word_text[i]) > 0) {
+        cat("     Para", i, ":", substr(word_text[i], 1, 60), "...\n")
+      }
+    }
   }, error = function(e) {
     cat("❌ Failed to extract Word text:", e$message, "\n")
     return(FALSE)
   })
 
   # Step 4: Analyze tracked changes (optional - for information)
-  cat("🔍 Analyzing tracked changes...\n")
+  cat("\n🔍 Analyzing tracked changes...\n")
   tryCatch({
     changes <- analyze_xml_changes(edited_docx_path)
     cat("   Found", length(changes), "tracked changes\n")
@@ -255,15 +271,14 @@ production_qmd_reconstruction <- function(original_qmd_path, edited_docx_path, o
     cat("   Warning: Could not analyze tracked changes:", e$message, "\n")
   })
 
-  # Step 5: Identify content paragraphs to update
-  cat("🎯 Identifying content to update...\n")
+  # Step 5: Identify content paragraphs intelligently
+  cat("\n🎯 Mapping content paragraphs...\n")
+  content_paragraphs <- filter_word_content_paragraphs(word_text, original_lines)
 
-  # Skip title, headers, and empty paragraphs
-  content_paragraphs <- word_text[
-    word_text != "" &
-      !grepl("^#+", word_text) &
-      !word_text %in% c("Minimal Test", "Test Document", "Clinical Report", "Reconstruction Test")
-  ]
+  cat("   Content paragraphs identified:", length(content_paragraphs), "\n")
+  for (i in seq_along(content_paragraphs)) {
+    cat("     Content", i, ":", substr(content_paragraphs[[i]]$text, 1, 50), "...\n")
+  }
 
   if (length(content_paragraphs) == 0) {
     cat("⚠️  No content paragraphs found to update\n")
@@ -273,33 +288,28 @@ production_qmd_reconstruction <- function(original_qmd_path, edited_docx_path, o
   }
 
   # Step 6: Update QMD lines with new content
-  cat("🔧 Updating QMD content...\n")
+  cat("\n🔧 Updating QMD content...\n")
   updated_lines <- original_lines
-  content_index <- 1
 
-  for (i in seq_along(original_lines)) {
-    line <- original_lines[i]
+  for (content_para in content_paragraphs) {
+    # Find the matching QMD line
+    qmd_line_num <- find_matching_qmd_line(content_para, original_lines)
 
-    # Skip YAML, headers, and empty lines
-    if (grepl("^---$|^#+|^$", line)) {
-      next
-    }
+    if (!is.null(qmd_line_num)) {
+      cat("   Mapping Word para to QMD line", qmd_line_num, "\n")
+      cat("     Original:", substr(original_lines[qmd_line_num], 1, 50), "...\n")
+      cat("     Word text:", substr(content_para$text, 1, 50), "...\n")
 
-    # Check if this line has editable content
-    if (grepl("This is|The study|Results show", line) && content_index <= length(content_paragraphs)) {
-      new_content <- content_paragraphs[content_index]
+      # Preserve protected content while updating
+      updated_line <- preserve_protected_content_in_update(
+        original_lines[qmd_line_num],
+        content_para$text
+      )
 
-      cat("   Updating line", i, "\n")
-      cat("     Original:", shQuote(line), "\n")
-      cat("     New Word:", shQuote(new_content), "\n")
-
-      # Preserve protected content while updating editable parts
-      updated_line <- preserve_protected_content_in_update(line, new_content)
-
-      updated_lines[i] <- updated_line
-      cat("     Updated: ", shQuote(updated_line), "\n\n")
-
-      content_index <- content_index + 1
+      updated_lines[qmd_line_num] <- updated_line
+      cat("     Updated:", substr(updated_line, 1, 50), "...\n\n")
+    } else {
+      cat("   No matching QMD line found for Word paragraph\n")
     }
   }
 
@@ -311,6 +321,121 @@ production_qmd_reconstruction <- function(original_qmd_path, edited_docx_path, o
   cat("📂 Output file:", output_qmd_path, "\n")
 
   return(TRUE)
+}
+
+#' Filter Word paragraphs to identify actual content (not titles/headers)
+#' @param word_text Character vector from extract_word_text()
+#' @param original_qmd_lines Character vector of original QMD lines
+#' @return List of content paragraphs with text and indices
+filter_word_content_paragraphs <- function(word_text, original_qmd_lines) {
+  content_paragraphs <- list()
+
+  for (i in seq_along(word_text)) {
+    para_text <- word_text[i]
+
+    # Skip empty paragraphs
+    if (nchar(trimws(para_text)) == 0) next
+
+    # Skip if it looks like a title or header
+    if (is_title_or_header(para_text, original_qmd_lines)) next
+
+    # If it contains substantive content, include it
+    if (nchar(para_text) > 20) {  # Threshold for substantive content
+      content_paragraphs[[length(content_paragraphs) + 1]] <- list(
+        text = para_text,
+        word_para_index = i
+      )
+    }
+  }
+
+  return(content_paragraphs)
+}
+
+#' Check if a Word paragraph is likely a title or header
+#' @param para_text Text from Word paragraph
+#' @param original_qmd_lines Original QMD lines for comparison
+#' @return TRUE if paragraph is title/header
+is_title_or_header <- function(para_text, original_qmd_lines) {
+  # Check against YAML title
+  for (line in original_qmd_lines) {
+    if (grepl("^title:", line)) {
+      title_extracted <- gsub("title:\\s*['\"](.+)['\"]", "\\1", line)
+      if (trimws(para_text) == trimws(title_extracted)) {
+        return(TRUE)
+      }
+    }
+  }
+
+  # Check against markdown headers (remove # symbols)
+  for (line in original_qmd_lines) {
+    if (grepl("^#+", line)) {
+      header_text <- gsub("^#+\\s*", "", line)
+      if (trimws(para_text) == trimws(header_text)) {
+        return(TRUE)
+      }
+    }
+  }
+
+  return(FALSE)
+}
+
+#' Find the QMD line that matches a Word content paragraph
+#' @param content_para List with text and word_para_index
+#' @param original_lines Character vector of original QMD lines
+#' @return Line number of best match, or NULL if no good match
+find_matching_qmd_line <- function(content_para, original_lines) {
+  para_text <- content_para$text
+
+  # Clean the Word paragraph text for comparison
+  para_clean <- clean_text_for_matching(para_text)
+
+  best_match_line <- NULL
+  best_similarity <- 0
+
+  for (i in seq_along(original_lines)) {
+    line <- original_lines[i]
+
+    # Skip YAML, headers, empty lines
+    if (grepl("^---|^#+|^$", line)) next
+
+    # Clean the QMD line
+    line_clean <- clean_text_for_matching(line)
+
+    # Calculate similarity
+    similarity <- calculate_text_similarity(para_clean, line_clean)
+
+    if (similarity > best_similarity && similarity > 0.3) {  # Threshold for reasonable match
+      best_similarity <- similarity
+      best_match_line <- i
+    }
+  }
+
+  return(best_match_line)
+}
+
+#' Calculate text similarity between two cleaned text strings
+#' @param text1 First text string
+#' @param text2 Second text string
+#' @return Similarity score between 0 and 1
+calculate_text_similarity <- function(text1, text2) {
+  if (nchar(text1) == 0 || nchar(text2) == 0) return(0)
+
+  # Split into words
+  words1 <- strsplit(tolower(text1), "\\s+")[[1]]
+  words2 <- strsplit(tolower(text2), "\\s+")[[1]]
+
+  # Remove very short words and common words
+  stop_words <- c("the", "and", "with", "was", "were", "are", "for", "this", "that", "from")
+  words1 <- words1[nchar(words1) > 2 & !words1 %in% stop_words]
+  words2 <- words2[nchar(words2) > 2 & !words2 %in% stop_words]
+
+  if (length(words1) == 0 || length(words2) == 0) return(0)
+
+  # Calculate Jaccard similarity
+  intersection <- length(intersect(words1, words2))
+  union <- length(union(words1, words2))
+
+  return(intersection / union)
 }
 
 #' Preserve protected content during line updates
