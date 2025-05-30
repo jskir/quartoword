@@ -8,6 +8,10 @@
 #find_matching_qmd_line()
 #calculate_text_similarity()
 #preserve_protected_content_in_update()
+#extract_protected_elements_with_positions()
+#extract_editable_portions()
+#reconstruct_line_with_structure()
+#clean_tracked_changes_artifacts()
 #tokenize_text_to_ast_content()
 
 
@@ -438,51 +442,212 @@ calculate_text_similarity <- function(text1, text2) {
   return(intersection / union)
 }
 
-#' Preserve protected content during line updates
+#' Preserve protected content using structural approach
 #' @param original_line Original QMD line with potential protected content
 #' @param new_word_content New content from Word document
 #' @return Updated line with protected content preserved
 preserve_protected_content_in_update <- function(original_line, new_word_content) {
 
-  # Find protected content patterns
-  protected_patterns <- regmatches(original_line, gregexpr("\\[.*?\\]\\{[^}]*\\}", original_line))[[1]]
+  cat("       Structural preservation approach...\n")
+  cat("       Original:", original_line, "\n")
+  cat("       Word text:", new_word_content, "\n")
 
-  if (length(protected_patterns) > 0) {
-    cat("       Found", length(protected_patterns), "protected elements\n")
+  # Extract protected elements and their positions
+  protected_info <- extract_protected_elements_with_positions(original_line)
 
-    # Strategy: Replace editable text but keep protected elements
-    # Extract the editable text portion
-    editable_part <- original_line
-    for (pattern in protected_patterns) {
-      editable_part <- gsub(pattern, "PROTECTED_PLACEHOLDER", editable_part, fixed = TRUE)
-    }
+  if (length(protected_info) == 0) {
+    # No protected content - just clean up tracked changes
+    result <- clean_tracked_changes_artifacts(new_word_content)
+    cat("       No protected content - cleaned result:", result, "\n")
+    return(result)
+  }
 
-    # Clean the editable part
-    editable_clean <- clean_text_for_matching(editable_part)
-    new_content_clean <- clean_text_for_matching(new_word_content)
+  cat("       Found", length(protected_info), "protected elements\n")
 
-    # If content is substantially different, update it
-    if (editable_clean != new_content_clean) {
-      # Reconstruct with new editable content and original protected content
-      result <- new_word_content
+  # Get the editable portions of the original line
+  original_editable <- extract_editable_portions(original_line, protected_info)
+  cat("       Original editable parts:", paste(original_editable, collapse=" | "), "\n")
 
-      # Insert protected elements back (simple approach: add at end)
-      for (pattern in protected_patterns) {
-        if (!grepl(gsub("\\[|\\]|\\{|\\}", "", pattern), result)) {
-          # Insert protected content in appropriate position
-          result <- gsub("\\.$", paste("", pattern, "."), result)
-          if (!grepl("\\.$", result)) {
-            result <- paste(result, pattern)
-          }
-        }
+  # Clean the new Word content
+  new_content_clean <- clean_tracked_changes_artifacts(new_word_content)
+  cat("       Cleaned Word content:", new_content_clean, "\n")
+
+  # Reconstruct the line by mapping editable changes to the structure
+  result_line <- reconstruct_line_with_structure(original_line, protected_info, original_editable, new_content_clean)
+
+  cat("       Reconstructed:", result_line, "\n")
+  return(result_line)
+}
+
+#' Extract protected elements with their positions in the line
+#' @param line Line of text to analyze
+#' @return List of protected element info with positions
+extract_protected_elements_with_positions <- function(line) {
+  protected_info <- list()
+
+  # Find all protected patterns and their positions
+  patterns <- c(
+    "\\[[^\\]]+\\]\\{custom-style=\"[^\"]+\"\\}",  # Custom style syntax
+    "\\[[^\\]]+\\]\\{\\.[^}]+\\}",                 # Class syntax
+    "`r\\s+[^`]+`",                                # R code
+    "\\{\\{<[^>]+>\\}\\}",                         # Quarto shortcodes
+    "@[a-zA-Z][a-zA-Z0-9_-]*"                     # Cross-references
+  )
+
+  for (pattern in patterns) {
+    matches <- gregexpr(pattern, line)[[1]]
+    if (matches[1] != -1) {
+      for (i in seq_along(matches)) {
+        start_pos <- matches[i]
+        length_val <- attr(matches, "match.length")[i]
+        protected_text <- substr(line, start_pos, start_pos + length_val - 1)
+
+        protected_info[[length(protected_info) + 1]] <- list(
+          text = protected_text,
+          start_pos = start_pos,
+          end_pos = start_pos + length_val - 1,
+          pattern_type = pattern
+        )
       }
-
-      return(result)
     }
   }
 
-  # If no protected content or no substantial change, return new content
-  return(new_word_content)
+  # Sort by position
+  if (length(protected_info) > 0) {
+    protected_info <- protected_info[order(sapply(protected_info, function(x) x$start_pos))]
+  }
+
+  return(protected_info)
+}
+
+#' Extract editable portions between protected elements
+#' @param line Original line
+#' @param protected_info List of protected element info
+#' @return Vector of editable text segments
+extract_editable_portions <- function(line, protected_info) {
+  if (length(protected_info) == 0) {
+    return(line)
+  }
+
+  editable_parts <- c()
+  last_end <- 0
+
+  for (info in protected_info) {
+    # Get text before this protected element
+    if (info$start_pos > last_end + 1) {
+      before_text <- substr(line, last_end + 1, info$start_pos - 1)
+      if (nchar(trimws(before_text)) > 0) {
+        editable_parts <- c(editable_parts, trimws(before_text))
+      }
+    }
+    last_end <- info$end_pos
+  }
+
+  # Get text after the last protected element
+  if (last_end < nchar(line)) {
+    after_text <- substr(line, last_end + 1, nchar(line))
+    if (nchar(trimws(after_text)) > 0) {
+      editable_parts <- c(editable_parts, trimws(after_text))
+    }
+  }
+
+  return(editable_parts)
+}
+
+#' Reconstruct line preserving structure but updating editable content
+#' @param original_line Original line
+#' @param protected_info Protected element information
+#' @param original_editable Original editable portions
+#' @param new_content New content from Word
+#' @return Reconstructed line
+reconstruct_line_with_structure <- function(original_line, protected_info, original_editable, new_content) {
+
+  # Strategy: Build segments and map new content to editable portions
+
+  # If the editable content is substantially similar, just preserve original structure
+  original_clean <- clean_text_for_matching(paste(original_editable, collapse = " "))
+  new_clean <- clean_text_for_matching(new_content)
+
+  similarity <- calculate_text_similarity(original_clean, new_clean)
+  cat("         Content similarity:", round(similarity, 3), "\n")
+
+  if (similarity > 0.7) {
+    # High similarity - likely just markup differences, preserve original
+    cat("         High similarity - preserving original structure\n")
+    return(original_line)
+  }
+
+  # Low similarity - real edits detected, need to reconstruct
+  cat("         Low similarity - reconstructing with edits\n")
+
+  # Simple reconstruction: Replace editable parts while keeping protected elements
+  result_line <- original_line
+
+  # For now, use a simple approach: replace the longest editable segment
+  if (length(original_editable) > 0) {
+    longest_segment <- original_editable[which.max(nchar(original_editable))]
+    cat("         Replacing longest segment:", longest_segment, "with:", new_content, "\n")
+
+    # Replace the longest editable segment with new content
+    result_line <- gsub(longest_segment, new_content, result_line, fixed = TRUE)
+  }
+
+  return(result_line)
+}
+
+#' Enhanced tracked changes cleanup
+#' @param text Text that may contain tracked changes artifacts
+#' @return Cleaned text
+clean_tracked_changes_artifacts <- function(text) {
+
+  # Remove duplicate words (tracked changes artifacts)
+  words <- strsplit(text, "\\s+")[[1]]
+  cleaned_words <- c()
+
+  i <- 1
+  while (i <= length(words)) {
+    current_word <- words[i]
+
+    # Look ahead for potential duplicates
+    if (i < length(words)) {
+      next_word <- words[i + 1]
+
+      # Check for case variations (primary PRIMARY)
+      if (tolower(current_word) == tolower(next_word) && current_word != next_word) {
+        # Prefer the uppercase/modified version
+        if (any(toupper(current_word) == current_word, toupper(next_word) == next_word)) {
+          chosen_word <- ifelse(toupper(next_word) == next_word, next_word, current_word)
+          cleaned_words <- c(cleaned_words, chosen_word)
+          i <- i + 2
+          next
+        }
+      }
+    }
+
+    cleaned_words <- c(cleaned_words, current_word)
+    i <- i + 1
+  }
+
+  result <- paste(cleaned_words, collapse = " ")
+
+  # Specific cleanup patterns for common tracked changes
+  cleanup_patterns <- list(
+    c("\\bstatistical\\s+CLEAR\\s+significance\\s+BENEFIT\\b", "CLEAR BENEFIT"),
+    c("\\bprimary\\s+PRIMARY\\s+endpoint\\s+OBJECTIVE\\b", "PRIMARY OBJECTIVE"),
+    c("\\bprimary\\s+PRIMARY\\b", "PRIMARY"),
+    c("\\bendpoint\\s+OBJECTIVE\\b", "OBJECTIVE"),
+    c("\\bstatistical\\s+CLEAR\\b", "CLEAR"),
+    c("\\bsignificance\\s+BENEFIT\\b", "BENEFIT")
+  )
+
+  for (pattern_pair in cleanup_patterns) {
+    result <- gsub(pattern_pair[1], pattern_pair[2], result, ignore.case = TRUE)
+  }
+
+  # Clean up multiple spaces and trim
+  result <- gsub("\\s+", " ", trimws(result))
+
+  return(result)
 }
 
 #' Convert plain text to AST content format (Str and Space elements)

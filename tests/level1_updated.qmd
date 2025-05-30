@@ -5,8 +5,8 @@ format: docx
 
 # Clinical Study Report
 
-Level 1 Test [245]{custom-style="ProtectedParam"} [drug ABC-123]{custom-style="ProtectedParam"} [placebo]{custom-style="ProtectedParam"}
+The study enrolled 245 patients using drug ABC-123 versus placebo.
 
 Results are shown in [Table 1]{custom-style="CrossReference"} and [Figure 2]{custom-style="CrossReference"}.
 
-The primary endpoint was met with statistical significance.
+The PRIMARY OBJECTIVE was met with CLEAR significanceBENEFIT.
